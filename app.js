@@ -77,7 +77,8 @@ app.get('/logout', (req, res) => {
 });
 
 app.get('/', protegerVista, (req, res) => {
-  res.render('index');
+  // Pasamos el objeto usuario (que viene del JWT) a la vista EJS
+  res.render('index', { user: req.usuario }); 
 });
 
 app.use('/api', apiRoutes);
