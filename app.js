@@ -9,7 +9,7 @@ const { Usuario } = require('./models/LaboratorioModels');
 
 const app = express();
 
-// --- 1. CONFIGURACIÓN DE BASE DE DATOS 
+//  1. CONFIGURACIÓN DE BASE DE DATOS 
 const mongoURI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/laboratorio_pro';
 mongoose.connect(mongoURI)
   .then(() => console.log('✅ Conexión a MongoDB exitosa'))
@@ -57,17 +57,16 @@ res.redirect('/login');
 app.post('/auth', async (req, res) => {
 try {
 const { username, password } = req.body;
-const user = await Usuario.findOne({ username, password });
-if (user) {
-req.session.usuarioLogueado = { id: user._id, username: user.username };
-res.redirect('/');
+const { username, password } = req.body;
+const user = await Usuario.findOne({ username });
+
+// Verificamos si el usuario existe y si la contraseña coincide usando el método que creamos
+if (user && await user.compararPassword(password)) {
+    req.session.usuarioLogueado = { id: user._id, username: user.username };
+    res.redirect('/');
 } else {
-res.send('<script>alert("Credenciales incorrectas"); window.location.href="/login";</script>');
+    // ... error
 }
-} catch (err) {
-res.status(500).send("Error de servidor");
-}
-});
 
 //  visita de login de segurida 
 app.get('/logout', (req, res) => {

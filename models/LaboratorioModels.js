@@ -39,7 +39,28 @@ const UsuarioSchema = new mongoose.Schema({
   cargo: { type: String, required: true }, password: { type: String, required: true }
 }, { timestamps: true });
   
+const bcrypt = require('bcryptjs'); // 1. Agrega este require al inicio del archivo
 
+// ... (después de definir const UsuarioSchema = new mongoose.Schema({ ... });)
+
+// 2. INSERTAR ESTO AQUÍ:
+UsuarioSchema.pre('save', async function(next) {
+  // Solo encripta si la contraseña ha sido modificada (o es nueva)
+  if (!this.isModified('password')) return next();
+
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Método para comparar contraseñas (útil para el login)
+UsuarioSchema.methods.compararPassword = async function(passwordCandidata) {
+  return await bcrypt.compare(passwordCandidata, this.password);
+};
 
 // formato resumen de exportacion para simplificar codigo
 module.exports = {
