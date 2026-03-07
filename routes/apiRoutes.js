@@ -1,3 +1,4 @@
+// declaracion de variables para importacion
 const express = require('express');
 const Ctrl = require('../controllers/GeneralController');
 const router = express.Router();
@@ -12,14 +13,14 @@ const mapeo = {
   resultados: Ctrl.ResultadoCtrl
 };
 
-// --- 1. RUTAS PÚBLICAS (Sin necesidad de Login) ---
-// Según tus requerimientos: Seleccionar qué información es visible para cualquiera.
+// 1. RUTAS PÚBLICAS (Sin necesidad de Login) 
+// Según requerimientos: Seleccionar qué información es visible para cualquiera.
 router.get('/examenes/public', (req, res) => {
-    // Ejemplo: Catálogo de precios de exámenes visible para pacientes sin loguearse
+    
     Ctrl.ExamenCtrl.listar(req, res);
 });
 
-// --- 2. RUTAS CON FILTRO DE ROLES (Reemplaza el bucle para acciones críticas) ---
+// 2. RUTAS CON FILTRO DE ROLES 
 
 // GESTIÓN DE USUARIOS: Solo el Administrador puede tocar esto.
 router.use('/usuarios', verificarAcceso(['Admin'])); 

@@ -1,4 +1,5 @@
 // declaracion de variables
+const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 // estructura de esquema de datos en el documento para cada coleccion
 // entidad base de la operacion del laboratorio " paciente"
@@ -38,22 +39,17 @@ const UsuarioSchema = new mongoose.Schema({
   rol: { type: String, enum: ['Admin', 'Bioanalista', 'Recepcion'], default: 'Bioanalista' },
   cargo: { type: String, required: true }, password: { type: String, required: true }
 }, { timestamps: true });
-  
-const bcrypt = require('bcryptjs'); // 1. Agrega este require al inicio del archivo
 
-// ... (después de definir const UsuarioSchema = new mongoose.Schema({ ... });)
 
-// 2. INSERTAR ESTO AQUÍ:
-UsuarioSchema.pre('save', async function(next) {
+UsuarioSchema.pre('save', async function() 
   // Solo encripta si la contraseña ha sido modificada (o es nueva)
-  if (!this.isModified('password')) return next();
-
+  if (!this.isModified('password')) return; 
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
-    next();
+    // No hace falta llamar a next() aquí, Mongoose espera a que termine el async
   } catch (error) {
-    next(error);
+    throw error; // En funciones async, lanzar el error equivale a next(error)
   }
 });
 
