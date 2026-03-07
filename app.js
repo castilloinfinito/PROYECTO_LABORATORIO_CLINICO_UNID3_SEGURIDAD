@@ -78,7 +78,7 @@ app.get('/logout', (req, res) => {
 
 app.get('/', protegerVista, (req, res) => {
   // El middleware 'protegerVista' o  verificador de JWT debe haber 
-  // guardado los datos del usuario en req.usuario (o req.session.usuario)
+  // guardado los datos del usuario en req.usuario (o req.session.usuario) git 
   
   const datosUsuario = req.usuario || req.session.usuarioLogueado;
 
