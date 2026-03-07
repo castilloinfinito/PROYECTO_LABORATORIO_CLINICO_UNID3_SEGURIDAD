@@ -1,96 +1,85 @@
+// Carga de variables de entorno (.env)
+require('dotenv').config(); 
 const express = require('express');
 const mongoose = require('mongoose');
 const session = require('express-session');
 const path = require('path');
 const apiRoutes = require('./routes/apiRoutes');
-// IMPORTANTE: Importar el modelo aquí para que esté disponible
 const { Usuario } = require('./models/LaboratorioModels');
 
 const app = express();
 
-// --- 1. CONFIGURACIÓN DE BASE DE DATOS ---
-mongoose.connect('mongodb://127.0.0.1:27017/laboratorio_pro')
+// --- 1. CONFIGURACIÓN DE BASE DE DATOS 
+const mongoURI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/laboratorio_pro';
+mongoose.connect(mongoURI)
   .then(() => console.log('✅ Conexión a MongoDB exitosa'))
   .catch(err => console.error('❌ Error de conexión:', err));
 
-// --- 2. MIDDLEWARES ---
+//  CONFIGURACIÓN DE MOTOR DE VISTAS Y EJS 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// --- 3. CONFIGURACIÓN DE SESIÓN ---
+// . CONFIGURACIÓN DE SESIÓN 
 app.use(session({
-  secret: 'clave_maestra_segura_123',
+  secret: process.env.JWT_SECRET || 'clave_maestra_segura_123',
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false }
+  cookie: { secure: false, maxAge: 3600000 } // Sesión por 1 hora
 }));
 
-// --- 4. MIDDLEWARE DE PROTECCIÓN ---
-const protegerVista = (req, res, next) => {
-  if (req.session && req.session.usuarioLogueado) {
-    next();
-  } else {
-    res.redirect('/login');
-  }
+// RUTA RAIZ: Ahora pasa por protegerVista (EL MURO DE SEGURIDAD)
+
+//Middleware protegerVista:
+
+const protegerVista = async (req, res, next) => {
+if (req.session && req.session.usuarioLogueado) {
+try {
+const usuarioDb = await Usuario.findById(req.session.usuarioLogueado.id);
+if (!usuarioDb) {
+req.session.destroy();
+return res.redirect('/login');
+}
+res.locals.user = usuarioDb;
+next();
+} catch (err) {
+res.redirect('/login');
+}
+} else {
+res.redirect('/login');
+}
 };
 
-// --- 5. RUTAS ---
+// Ruta de Autenticación:
 
-app.get('/login', (req, res) => {
-  res.render('login'); 
-});
-
-// RUTA AUTH CORREGIDA
 app.post('/auth', async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    console.log(`🔍 Intento de acceso - Usuario: ${username}`);
-
-    // Buscamos el usuario
-    const user = await Usuario.findOne({ username, password });
-
-    if (user) {
-      console.log('✅ Usuario validado con éxito');
-      req.session.usuarioLogueado = true;
-      req.session.nombreUsuario = user.username;
-      res.redirect('/');
-    } else {
-      console.log('❌ Credenciales incorrectas');
-      res.send(`
-        <script>
-          alert("Acceso denegado: Usuario o clave incorrecta");
-          window.location.href = "/login";
-        </script>
-      `);
-    }
-  } catch (err) {
-    console.error("Error en auth:", err);
-    res.status(500).send("Error interno del servidor");
-  }
+try {
+const { username, password } = req.body;
+const user = await Usuario.findOne({ username, password });
+if (user) {
+req.session.usuarioLogueado = { id: user._id, username: user.username };
+res.redirect('/');
+} else {
+res.send('<script>alert("Credenciales incorrectas"); window.location.href="/login";</script>');
+}
+} catch (err) {
+res.status(500).send("Error de servidor");
+}
 });
 
+//  visita de login de segurida 
 app.get('/logout', (req, res) => {
   req.session.destroy();
   res.redirect('/login');
 });
 
-app.get('/', protegerVista, (req, res) => {
-  // El middleware 'protegerVista' o  verificador de JWT debe haber 
-  // guardado los datos del usuario en req.usuario (o req.session.usuario) git 
-  
-  const datosUsuario = req.usuario || req.session.usuarioLogueado;
-
-  res.render('index', { 
-    user: datosUsuario // AQUÍ es donde le pasamos el usuario a la vista
-  });
-});
-
+// RUTAS DE LA API (Protegidas también por el router interno)
 app.use('/api', apiRoutes);
 
 // --- 6. LANZAMIENTO ---
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 LAB-SYSTEM ACTIVO en http://localhost:${PORT}`);
 });

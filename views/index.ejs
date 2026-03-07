@@ -111,11 +111,12 @@
     </li>
 <% } %>
 
-<% if (typeof user !== 'undefined' && user && user.rol === 'Admin') { %>
-    <li id="li-usuarios" onclick="switchModulo('usuarios')">
-        <i class="fas fa-user-shield"></i> Usuarios
-    </li>
+<% if (locals.user && user.rol === 'Admin') { %>
+<li id="li-usuarios" onclick="switchModulo('usuarios')">
+<i class="fas fa-user-shield"></i> Usuarios
+</li>
 <% } %>
+
       </ul>
     </div>
     <a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</a>
