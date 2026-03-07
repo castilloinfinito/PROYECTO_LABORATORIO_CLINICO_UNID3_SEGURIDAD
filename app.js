@@ -77,8 +77,14 @@ app.get('/logout', (req, res) => {
 });
 
 app.get('/', protegerVista, (req, res) => {
-  // Pasamos el objeto usuario (que viene del JWT) a la vista EJS
-  res.render('index', { user: req.usuario }); 
+  // El middleware 'protegerVista' o  verificador de JWT debe haber 
+  // guardado los datos del usuario en req.usuario (o req.session.usuario)
+  
+  const datosUsuario = req.usuario || req.session.usuarioLogueado;
+
+  res.render('index', { 
+    user: datosUsuario // AQUÍ es donde le pasamos el usuario a la vista
+  });
 });
 
 app.use('/api', apiRoutes);
