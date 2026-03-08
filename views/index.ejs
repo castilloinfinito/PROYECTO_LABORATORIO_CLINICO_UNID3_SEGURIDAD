@@ -39,7 +39,7 @@
     nav li:hover { background: #334155; }
     nav li.active { background: var(--accent); color: white; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
 
-    .logout-btn { margin-top: auto; padding: 12px 15px; color: #f87171; text-decoration: none; display: flex; align-items: center; gap: 10px; font-weight: 600; border-radius: 8px; transition: 0.3s; }
+    .logout-btn { margin-top: auto; padding: 12px 15px; color: #f87171; cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 10px; font-weight: 600; border-radius: 8px; transition: 0.3s; border: none; background: transparent; }
     .logout-btn:hover { background: #450a0a; }
 
     /* CONTENIDO */
@@ -89,43 +89,41 @@
 </head>
 <body>
 
+  <script>
+    if (!localStorage.getItem('token')) {
+      window.location.href = '/login';
+    }
+  </script>
+
   <nav>
     <div>
       <h2><i class="fas fa-microscope"></i> LAB-PRO</h2>
       <ul id="menu-items">
-    <li id="li-pacientes" class="active" onclick="switchModulo('pacientes')">
-        <i class="fas fa-hospital-user"></i> Pacientes
-    </li>
-
-    <li id="li-medicos" onclick="switchModulo('medicos')">
-        <i class="fas fa-user-md"></i> Médicos
-    </li>
-
-    <li id="li-examenes" onclick="switchModulo('examenes')">
-        <i class="fas fa-vials"></i> Exámenes
-    </li>
-
-   <% if (typeof user !== 'undefined' && user && (user.rol === 'Admin' || user.rol === 'Bioanalista')) { %>
-    <li id="li-resultados" onclick="switchModulo('resultados')">
-        <i class="fas fa-clipboard-check"></i> Resultados
-    </li>
-<% } %>
-
-<% if (locals.user && user.rol === 'Admin') { %>
-<li id="li-usuarios" onclick="switchModulo('usuarios')">
-<i class="fas fa-user-shield"></i> Usuarios
-</li>
-<% } %>
-
+        <li id="li-pacientes" class="active" onclick="switchModulo('pacientes')">
+          <i class="fas fa-hospital-user"></i> Pacientes
+        </li>
+        <li id="li-medicos" onclick="switchModulo('medicos')">
+          <i class="fas fa-user-md"></i> Médicos
+        </li>
+        <li id="li-examenes" onclick="switchModulo('examenes')">
+          <i class="fas fa-vials"></i> Exámenes
+        </li>
+        <li id="li-resultados" style="display: none;" onclick="switchModulo('resultados')">
+          <i class="fas fa-clipboard-check"></i> Resultados
+        </li>
+        <li id="li-usuarios" style="display: none;" onclick="switchModulo('usuarios')">
+          <i class="fas fa-user-shield"></i> Usuarios
+        </li>
       </ul>
     </div>
-    <a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</a>
+    <button onclick="logout()" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</button>
   </nav>
 
   <main>
     <div class="header-flex">
       <h1 id="page-title">Gestión de Pacientes</h1>
       <div style="display: flex; gap: 10px;">
+        <span id="user-display" style="align-self: center; font-weight: bold; color: var(--accent); margin-right: 15px;"></span>
         <button class="btn btn-new" onclick="abrirFormulario()"><i class="fas fa-plus-circle"></i> Nuevo Registro</button>
         <button class="btn btn-refresh" onclick="cargarDatos()"><i class="fas fa-sync-alt"></i></button>
       </div>
@@ -153,6 +151,23 @@
   <script>
     let modActual = 'pacientes';
     let editId = null;
+    const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user'));
+
+    // 1. CONFIGURACIÓN DE ROLES AL CARGAR
+    window.onload = () => {
+      if (user) {
+        document.getElementById('user-display').innerText = `${user.username} (${user.rol})`;
+        // Mostrar menús según rol
+        if (user.rol === 'Admin' || user.rol === 'Bioanalista') {
+          document.getElementById('li-resultados').style.display = 'flex';
+        }
+        if (user.rol === 'Admin') {
+          document.getElementById('li-usuarios').style.display = 'flex';
+        }
+      }
+      cargarDatos();
+    };
 
     const esquemas = {
       pacientes: {
@@ -206,6 +221,42 @@
       cargarDatos();
     }
 
+    async function cargarDatos() {
+      try {
+        const config = esquemas[modActual];
+        document.getElementById('thead').innerHTML = `<tr>${config.labels.map(l=>`<th>${l}</th>`).join('')}<th>Acciones</th></tr>`;
+        
+        const res = await fetch(`/api/${modActual}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (res.status === 401 || res.status === 403) return logout();
+
+        const data = await res.json();
+        
+        document.getElementById('tbody').innerHTML = data.map(item => `
+          <tr>
+            ${config.keys.map(k => {
+              let val = item[k];
+              if(val && typeof val === 'object') val = val.nombre || val.username || val._id;
+              if(k === 'fecha' && val) val = new Date(val).toLocaleDateString();
+              return `<td>${val || '-'}</td>`;
+            }).join('')}
+            <td class="actions-cell">
+              <button class="action-btn edit-icon" onclick="prepararEdicion('${encodeURIComponent(JSON.stringify(item))}')">
+                <i class="fas fa-edit"></i>
+              </button>
+              <button class="action-btn delete-icon" onclick="eliminar('${item._id}')">
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error("Error cargando datos:", err);
+      }
+    }
+
     async function abrirFormulario(data = null) {
       editId = data ? data._id : null;
       const container = document.getElementById('dynamic-inputs');
@@ -213,20 +264,12 @@
       
       let html = '';
       for (const i of esquemas[modActual].inputs) {
-        // Lógica de recuperación de valor para edición (maneja objetos de Mongoose)
-        let val = '';
-        if (data) {
-          if (data[i.n] && typeof data[i.n] === 'object') {
-            val = data[i.n]._id; // Extrae el ID si es un objeto poblado
-          } else {
-            val = data[i.n] || '';
-          }
-        }
+        let val = data ? (data[i.n]?._id || data[i.n] || '') : '';
         
         if (i.t === 'select') {
           let opciones = i.o || [];
           if (i.ref) {
-            const res = await fetch(`/api/${i.ref}`);
+            const res = await fetch(`/api/${i.ref}`, { headers: {'Authorization': `Bearer ${token}`} });
             const lista = await res.json();
             opciones = lista.map(item => ({ val: item._id, lab: item.nombre }));
           } else {
@@ -236,7 +279,7 @@
           html += `<div class="input-group">
             <label>${i.l}</label>
             <select id="in-${i.n}" required>
-              <option value="">-- Seleccione una opción --</option>
+              <option value="">-- Seleccione --</option>
               ${opciones.map(opt => `<option value="${opt.val}" ${val == opt.val ? 'selected' : ''}>${opt.lab}</option>`).join('')}
             </select>
           </div>`;
@@ -250,51 +293,6 @@
       
       container.innerHTML = html;
       document.getElementById('form-section').style.display = 'block';
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    function cerrarFormulario() {
-      document.getElementById('form-section').style.display = 'none';
-      document.getElementById('crud-form').reset();
-      editId = null;
-    }
-
-    async function cargarDatos() {
-      try {
-        const config = esquemas[modActual];
-        document.getElementById('thead').innerHTML = `<tr>${config.labels.map(l=>`<th>${l}</th>`).join('')}<th>Acciones</th></tr>`;
-        
-        const res = await fetch(`/api/${modActual}`);
-        const data = await res.json();
-        
-        document.getElementById('tbody').innerHTML = data.map(item => `
-          <tr>
-            ${config.keys.map(k => {
-              let val = item[k];
-              // Si el valor es un objeto (poblado por Mongoose), mostrar el nombre
-              if(val && typeof val === 'object') val = val.nombre || val.username || val._id;
-              // Si es una fecha, formatearla
-              if(k === 'fecha' && val) val = new Date(val).toLocaleDateString();
-              return `<td>${val || '-'}</td>`;
-            }).join('')}
-            <td class="actions-cell">
-              <button class="action-btn edit-icon" onclick="prepararEdicion('${encodeURIComponent(JSON.stringify(item))}')" title="Editar">
-                <i class="fas fa-edit"></i>
-              </button>
-              <button class="action-btn delete-icon" onclick="eliminar('${item._id}')" title="Eliminar">
-                <i class="fas fa-trash-alt"></i>
-              </button>
-            </td>
-          </tr>
-        `).join('');
-      } catch (err) {
-        console.error("Error cargando datos:", err);
-      }
-    }
-
-    function prepararEdicion(datosCodificados) {
-      const data = JSON.parse(decodeURIComponent(datosCodificados));
-      abrirFormulario(data);
     }
 
     document.getElementById('crud-form').onsubmit = async (e) => {
@@ -308,36 +306,38 @@
       const method = editId ? 'PUT' : 'POST';
       const url = editId ? `/api/${modActual}/${editId}` : `/api/${modActual}`;
       
-      try {
-        const res = await fetch(url, {
-          method,
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(body)
-        });
-        if(res.ok) {
-          cerrarFormulario();
-          cargarDatos();
-        } else {
-          const errData = await res.json();
-          alert("Error: " + (errData.error || "No se pudo procesar la solicitud"));
-        }
-      } catch (err) {
-        console.error("Error en submit:", err);
-      }
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(body)
+      });
+
+      if(res.ok) { cerrarFormulario(); cargarDatos(); }
+      else alert("Error al procesar solicitud");
     };
 
     async function eliminar(id) {
-      if(confirm('¿Confirmas que deseas eliminar este registro de forma permanente?')) {
-        try {
-          const res = await fetch(`/api/${modActual}/${id}`, { method: 'DELETE' });
-          if(res.ok) cargarDatos();
-        } catch (err) {
-          console.error("Error al eliminar:", err);
-        }
-      }
+      if(!confirm('¿Eliminar registro?')) return;
+      const res = await fetch(`/api/${modActual}/${id}`, { 
+        method: 'DELETE', 
+        headers: { 'Authorization': `Bearer ${token}` } 
+      });
+      if(res.ok) cargarDatos();
     }
 
-    window.onload = cargarDatos;
+    function cerrarFormulario() {
+      document.getElementById('form-section').style.display = 'none';
+      editId = null;
+    }
+
+    function prepararEdicion(datosCodificados) {
+      abrirFormulario(JSON.parse(decodeURIComponent(datosCodificados)));
+    }
+
+    function logout() {
+      localStorage.clear();
+      window.location.href = '/login';
+    }
   </script>
 </body>
-</html>
+</html>node

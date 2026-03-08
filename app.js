@@ -1,84 +1,126 @@
-// Carga de variables de entorno (.env)
-require('dotenv').config(); 
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const session = require('express-session');
+const jwt = require('jsonwebtoken');
 const path = require('path');
-const apiRoutes = require('./routes/apiRoutes');
-const { Usuario } = require('./models/LaboratorioModels');
+const cors = require('cors');
+
+// 1. IMPORTACIÓN DE MODELOS
+const { Usuario, Paciente, Medico, Examen, Resultado } = require('./models/LaboratorioModels');
+
+// 2. IMPORTACIÓN DE CONTROLADORES
+const { PacienteCtrl, MedicoCtrl, ExamenCtrl, UsuarioCtrl, ResultadoCtrl } = require('./controllers/GeneralController');
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'laboratorio_secreto_2026';
 
-//  1. CONFIGURACIÓN DE BASE DE DATOS 
-const mongoURI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/laboratorio_pro';
-mongoose.connect(mongoURI)
-  .then(() => console.log('✅ Conexión a MongoDB exitosa'))
-  .catch(err => console.error('❌ Error de conexión:', err));
-
-//  CONFIGURACIÓN DE MOTOR DE VISTAS Y EJS 
+// --- CONFIGURACIÓN DE MOTOR DE PLANTILLAS ---
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
-app.use(express.static(path.join(__dirname, 'public')));
+
+// --- MIDDLEWARES GLOBALES ---
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
 
-// . CONFIGURACIÓN DE SESIÓN 
-app.use(session({
-  secret: process.env.JWT_SECRET || 'clave_maestra_segura_123',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { secure: false, maxAge: 3600000 } // Sesión por 1 hora
-}));
+// --- RUTAS PARA DESPLEGAR EL FRONTEND (VISTAS EJS) ---
+app.get('/login', (req, res) => {
+    res.render('login');
+});
 
-// RUTA RAIZ: Ahora pasa por protegerVista (EL MURO DE SEGURIDAD)
+app.get('/', (req, res) => {
+    res.render('index');
+});
 
-//Middleware protegerVista:
+// --- MIDDLEWARE DE SEGURIDAD JWT ---
+const auth = (rolesPermitidos = []) => {
+    return (req, res, next) => {
+        const authHeader = req.headers['authorization'];
+        const token = authHeader && authHeader.split(' ')[1];
 
-const protegerVista = async (req, res, next) => {
-if (req.session && req.session.usuarioLogueado) {
-try {
-const usuarioDb = await Usuario.findById(req.session.usuarioLogueado.id);
-if (!usuarioDb) {
-req.session.destroy();
-return res.redirect('/login');
-}
-res.locals.user = usuarioDb;
-next();
-} catch (err) {
-res.redirect('/login');
-}
-} else {
-res.redirect('/login');
-}
+        if (!token) {
+            return res.status(401).json({ success: false, error: "Acceso denegado. Token no proporcionado." });
+        }
+
+        try {
+            const decoded = jwt.verify(token, JWT_SECRET);
+            if (rolesPermitidos.length > 0 && !rolesPermitidos.includes(decoded.rol)) {
+                return res.status(403).json({ success: false, error: "No tienes permisos para esta acción." });
+            }
+            req.user = decoded;
+            next();
+        } catch (error) {
+            return res.status(403).json({ success: false, error: "Token inválido o expirado." });
+        }
+    };
 };
 
-// Ruta de Autenticación:
-
+// --- RUTA DE AUTENTICACIÓN (API) ---
 app.post('/auth', async (req, res) => {
-try {
-const { username, password } = req.body;
-const { username, password } = req.body;
-const user = await Usuario.findOne({ username });
+    try {
+        const { username, password } = req.body;
+        if (!username || !password) return res.status(400).json({ error: "Faltan datos" });
 
-// Verificamos si el usuario existe y si la contraseña coincide usando el método que creamos
-if (user && await user.compararPassword(password)) {
-    req.session.usuarioLogueado = { id: user._id, username: user.username };
-    res.redirect('/');
-} else {
-    // ... error
-}
+        const user = await Usuario.findOne({ username: username.trim() });
+        if (!user || !(await user.compararPassword(password))) {
+            return res.status(401).json({ success: false, error: "Usuario o clave incorrectos" });
+        }
 
-//  visita de login de segurida 
-app.get('/logout', (req, res) => {
-  req.session.destroy();
-  res.redirect('/login');
+        const token = jwt.sign(
+            { id: user._id, username: user.username, rol: user.rol },
+            JWT_SECRET,
+            { expiresIn: '8h' }
+        );
+
+        res.json({
+            success: true,
+            token,
+            user: { username: user.username, rol: user.rol }
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, error: "Error en login" });
+    }
 });
 
-// RUTAS DE LA API (Protegidas también por el router interno)
-app.use('/api', apiRoutes);
+// --- RUTAS DE LA API (DATOS) ---
+app.get('/api/pacientes', auth(['Admin', 'Bioanalista', 'Recepcion']), PacienteCtrl.listar);
+app.post('/api/pacientes', auth(['Admin', 'Recepcion']), PacienteCtrl.crear);
+app.put('/api/pacientes/:id', auth(['Admin', 'Recepcion']), PacienteCtrl.actualizar);
+app.delete('/api/pacientes/:id', auth(['Admin']), PacienteCtrl.eliminar);
 
-// --- 6. LANZAMIENTO ---
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 LAB-SYSTEM ACTIVO en http://localhost:${PORT}`);
-});
+app.get('/api/medicos', auth(['Admin', 'Bioanalista', 'Recepcion']), MedicoCtrl.listar);
+app.post('/api/medicos', auth(['Admin']), MedicoCtrl.crear);
+app.put('/api/medicos/:id', auth(['Admin']), MedicoCtrl.actualizar);
+app.delete('/api/medicos/:id', auth(['Admin']), MedicoCtrl.eliminar);
+
+app.get('/api/examenes', auth(['Admin', 'Bioanalista', 'Recepcion']), ExamenCtrl.listar);
+app.post('/api/examenes', auth(['Admin']), ExamenCtrl.crear);
+
+app.get('/api/resultados', auth(['Admin', 'Bioanalista', 'Recepcion']), ResultadoCtrl.listar);
+app.post('/api/resultados', auth(['Admin', 'Bioanalista']), ResultadoCtrl.crear);
+app.put('/api/resultados/:id', auth(['Admin', 'Bioanalista']), ResultadoCtrl.actualizar);
+
+app.get('/api/usuarios', auth(['Admin']), UsuarioCtrl.listar);
+app.post('/api/usuarios', auth(['Admin']), UsuarioCtrl.crear);
+
+// --- CONEXIÓN Y ARRANQUE ---
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/laboratorio_pro';
+
+mongoose.connect(MONGO_URI)
+    .then(() => {
+        console.log("----------------------------------------------");
+        console.log("✅ Conexión a MongoDB: OK");
+        // Escuchamos en 0.0.0.0 para resolver problemas de conexión local
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`🚀 Servidor iniciado con éxito`);
+            console.log(`🔗 Acceso Local: http://127.0.0.1:${PORT}/login`);
+            console.log(`🔗 Acceso Red:   http://localhost:${PORT}/login`);
+            console.log("----------------------------------------------");
+        });
+    })
+    .catch(err => {
+        console.error("❌ Error al conectar BD:", err);
+        process.exit(1);
+    });

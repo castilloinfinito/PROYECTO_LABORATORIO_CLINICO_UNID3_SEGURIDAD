@@ -1,51 +1,39 @@
-// declaracion de variables para importacion
 const express = require('express');
-const Ctrl = require('../controllers/GeneralController');
 const router = express.Router();
-// Importamos el nuevo middleware de JWT (asumiendo que lo creaste según la guía anterior)
-const { verificarAcceso } = require('../middlewares/authMiddleware');
+const { PacienteCtrl, MedicoCtrl, ExamenCtrl, UsuarioCtrl, ResultadoCtrl } = require('../controllers/GeneralController');
 
-const mapeo = {
-  pacientes: Ctrl.PacienteCtrl,
-  medicos: Ctrl.MedicoCtrl,
-  examenes: Ctrl.ExamenCtrl,
-  usuarios: Ctrl.UsuarioCtrl,
-  resultados: Ctrl.ResultadoCtrl
+// Middleware de Seguridad por Roles
+const auth = (roles) => (req, res, next) => {
+    if (req.session && req.session.usuarioLogueado && roles.includes(req.session.usuarioLogueado.rol)) {
+        return next();
+    }
+    res.status(401).json({ success: false, error: "No autorizado. Inicia sesión como: " + roles.join(', ') });
 };
 
-// 1. RUTAS PÚBLICAS (Sin necesidad de Login) 
-// Según requerimientos: Seleccionar qué información es visible para cualquiera.
-router.get('/examenes/public', (req, res) => {
-    
-    Ctrl.ExamenCtrl.listar(req, res);
-});
+// --- RUTAS DE PACIENTES ---
+router.get('/pacientes', auth(['Admin', 'Bioanalista', 'Recepcion']), PacienteCtrl.listar);
+router.post('/pacientes', auth(['Admin', 'Recepcion']), PacienteCtrl.crear);
+router.put('/pacientes/:id', auth(['Admin', 'Recepcion']), PacienteCtrl.actualizar);
+router.delete('/pacientes/:id', auth(['Admin']), PacienteCtrl.eliminar);
 
-// 2. RUTAS CON FILTRO DE ROLES 
+// --- RUTAS DE MÉDICOS ---
+router.get('/medicos', auth(['Admin', 'Bioanalista', 'Recepcion']), MedicoCtrl.listar);
+router.post('/medicos', auth(['Admin']), MedicoCtrl.crear);
+router.put('/medicos/:id', auth(['Admin']), MedicoCtrl.actualizar);
+router.delete('/medicos/:id', auth(['Admin']), MedicoCtrl.eliminar);
 
-// GESTIÓN DE USUARIOS: Solo el Administrador puede tocar esto.
-router.use('/usuarios', verificarAcceso(['Admin'])); 
-// (Cualquier ruta que empiece con /usuarios ahora requiere ser Admin)
+// --- RUTAS DE EXÁMENES ---
+router.get('/examenes', auth(['Admin', 'Bioanalista', 'Recepcion']), ExamenCtrl.listar);
+router.get('/examenes/public', ExamenCtrl.listar); 
+router.post('/examenes', auth(['Admin']), ExamenCtrl.crear);
 
-// GESTIÓN DE PACIENTES: Recepción crea, Admin elimina.
-router.post('/pacientes', verificarAcceso(['Admin', 'Recepcion']), Ctrl.PacienteCtrl.crear);
-router.delete('/pacientes/:id', verificarAcceso(['Admin']), Ctrl.PacienteCtrl.eliminar);
+// --- RUTAS DE RESULTADOS ---
+router.get('/resultados', auth(['Admin', 'Bioanalista', 'Recepcion']), ResultadoCtrl.listar);
+router.post('/resultados', auth(['Admin', 'Bioanalista']), ResultadoCtrl.crear);
+router.put('/resultados/:id', auth(['Admin', 'Bioanalista']), ResultadoCtrl.actualizar);
 
-// GESTIÓN DE RESULTADOS: Solo el Bioanalista o Admin cargan resultados.
-router.post('/resultados', verificarAcceso(['Admin', 'Bioanalista']), Ctrl.ResultadoCtrl.crear);
-router.put('/resultados/:id', verificarAcceso(['Admin', 'Bioanalista']), Ctrl.ResultadoCtrl.actualizar);
-
-// --- 3. BUCLE PARA OPERACIONES RESTANTES (Lectura General) ---
-Object.keys(mapeo).forEach(ent => {
-  // Todos los usuarios logueados pueden VER (listar) los datos
-  router.get(`/${ent}`, verificarAcceso(['Admin', 'Bioanalista', 'Recepcion']), mapeo[ent].listar);
-  
-  // Para las rutas que no definimos arriba manualmente, usamos un acceso genérico o Admin
-  // Esto evita que el bucle sobreescriba las reglas específicas de arriba
-  if (!router.stack.some(layer => layer.route && layer.route.path === `/${ent}` && layer.route.methods.post)) {
-      router.post(`/${ent}`, verificarAcceso(['Admin']), mapeo[ent].crear);
-      router.put(`/${ent}/:id`, verificarAcceso(['Admin']), mapeo[ent].actualizar);
-      router.delete(`/${ent}/:id`, verificarAcceso(['Admin']), mapeo[ent].eliminar);
-  }
-});
+// --- RUTAS DE USUARIOS ---
+router.get('/usuarios', auth(['Admin']), UsuarioCtrl.listar);
+router.post('/usuarios', auth(['Admin']), UsuarioCtrl.crear);
 
 module.exports = router;
