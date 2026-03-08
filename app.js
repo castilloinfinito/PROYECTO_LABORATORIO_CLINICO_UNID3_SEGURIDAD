@@ -112,8 +112,8 @@ mongoose.connect(MONGO_URI)
     .then(() => {
         console.log("----------------------------------------------");
         console.log("✅ Conexión a MongoDB: OK");
-        // Escuchamos en 0.0.0.0 para resolver problemas de conexión local
-        app.listen(PORT, '0.0.0.0', () => {
+        // Escuchamos en 3000 para resolver problemas de conexión local
+        app.listen(PORT, '0.0.0.0', '3000', () => {
             console.log(`🚀 Servidor iniciado con éxito`);
             console.log(`🔗 Acceso Local: http://127.0.0.1:${PORT}/login`);
             console.log(`🔗 Acceso Red:   http://localhost:${PORT}/login`);

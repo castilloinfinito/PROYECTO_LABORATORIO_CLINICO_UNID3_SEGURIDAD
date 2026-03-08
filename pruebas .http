@@ -1,1 +1,141 @@
-GET https://jsonplaceholder.typicode.com/posts/1
+### Configuración de Variables
+@baseUrl = http://localhost:3000
+@token = {{login.response.body.token}}
+
+# ==========================================
+# 1. AUTENTICACIÓN (LOGIN)
+# ==========================================
+
+# @name login
+POST {{baseUrl}}/auth
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "123"
+}
+
+###
+
+# ==========================================
+# 2. ENTIDAD: MÉDICOS
+# ==========================================
+
+# @name crearMedico
+POST {{baseUrl}}/api/medicos
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "nombre": "Dr. Gregory House", "especialidad": "Diagnóstico", "mpps": "12345" }
+
+###
+POST {{baseUrl}}/api/medicos
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "nombre": "Dra. Meredith Grey", "especialidad": "Cirugía General", "mpps": "67890" }
+
+### Listar Médicos (EJECUTAR ESTO PRIMERO PARA OBTENER IDs)
+# @name listarMedicos
+GET {{baseUrl}}/api/medicos
+Authorization: Bearer {{token}}
+
+### Actualizar Médico
+PUT {{baseUrl}}/api/medicos/{{listarMedicos.response.body.0._id}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "especialidad": "Diagnóstico Avanzado" }
+
+### Eliminar Médico
+DELETE {{baseUrl}}/api/medicos/{{listarMedicos.response.body.5._id}}
+Authorization: Bearer {{token}}
+
+###
+
+# ==========================================
+# 3. ENTIDAD: PACIENTES
+# ==========================================
+
+# @name crearPaciente
+POST {{baseUrl}}/api/pacientes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "nombre": "Juan Pérez", "ci": "V-10222333", "telefono": "0414-1112233" }
+
+###
+POST {{baseUrl}}/api/pacientes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "nombre": "María García", "ci": "V-20444555", "telefono": "0424-5556677" }
+
+### Listar Pacientes (EJECUTAR ESTO PARA OBTENER IDs)
+# @name listarPacientes
+GET {{baseUrl}}/api/pacientes
+Authorization: Bearer {{token}}
+
+### Actualizar Paciente
+PUT {{baseUrl}}/api/pacientes/{{listarPacientes.response.body.0._id}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "telefono": "0412-9990000" }
+
+###
+
+# ==========================================
+# 4. ENTIDAD: EXÁMENES
+# ==========================================
+
+# @name crearExamen
+POST {{baseUrl}}/api/examenes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ 
+    "nombre": "Perfil 20", 
+    "precio": 25.50, 
+    "numeroOrden": "EXP-001",
+    "medicoId": "{{listarMedicos.response.body.0._id}}"
+}
+
+###
+
+# ==========================================
+# 5. ENTIDAD: RESULTADOS
+# ==========================================
+
+# @name crearResultado
+POST {{baseUrl}}/api/resultados
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "numeroOrden": "ORD-1001",
+    "pacienteId": "{{listarPacientes.response.body.0._id}}",
+    "medicoId": "{{listarMedicos.response.body.0._id}}",
+    "valor": "Glicemia: 95 mg/dL (Normal)"
+}
+
+### Listar Resultados
+GET {{baseUrl}}/api/resultados
+Authorization: Bearer {{token}}
+
+###
+
+# ==========================================
+# 6. GESTIÓN DE USUARIOS
+# ==========================================
+
+POST {{baseUrl}}/api/usuarios
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "username": "bio_ana",
+    "password": "ClaveBioanalista123",
+    "rol": "Bioanalista",
+    "cargo": "Jefe de Laboratorio"
+} 
