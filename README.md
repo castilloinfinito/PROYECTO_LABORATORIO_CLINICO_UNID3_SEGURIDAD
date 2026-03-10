@@ -69,4 +69,4 @@ Tomemos como ejemplo la entidad Paciente:
 2.Read (R): Al entrar al módulo, el sistema ejecuta un GET y muestra la lista de pacientes en la tabla.
 3.Update (U): El Admin presiona el icono amarillo de edición, cambia el teléfono y guarda. El sistema ejecuta un PUT.
 4.Delete (D): Solo el Admin verá el icono rojo de basura. Al presionarlo y confirmar, el sistema ejecuta un DELETE.
-¿Te gustaría que generara ahora la documentación técnica de la API con los endpoints detallados en formato Markdown?
+enlace  ●Video Demostrativo (YouTube): https://youtu.be/CFGpGtz6F8Y  
